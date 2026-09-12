@@ -25,7 +25,7 @@
 using namespace rog_map;
 
 void ProbMap::initProbMap() {
-    static bool init_once{false};
+    bool& init_once = initialized_;
     if(init_once) {
         throw std::runtime_error(" -- [ROGMap] ProbMap can only init once.");
     }
@@ -59,17 +59,17 @@ void ProbMap::initProbMap() {
 
 
     posToGlobalIndex(cfg_.visualization_range, sc_.visualization_range_i);
-    posToGlobalIndex(cfg_.virtual_ceil_height, sc_.virtual_ceil_height_id_g);
-    posToGlobalIndex(cfg_.virtual_ground_height, sc_.virtual_ground_height_id_g);
+    if (cfg_.virtual_height_enable) {
+        posToGlobalIndex(cfg_.virtual_ceil_height, sc_.virtual_ceil_height_id_g);
+        posToGlobalIndex(cfg_.virtual_ground_height, sc_.virtual_ground_height_id_g);
+    } else {
+        sc_.virtual_ceil_height_id_g = std::numeric_limits<int>::max() / 4;
+        sc_.virtual_ground_height_id_g = std::numeric_limits<int>::min() / 4;
+    }
 
     cfg_.virtual_ceil_height = sc_.virtual_ceil_height_id_g * cfg_.resolution;
     cfg_.virtual_ground_height = sc_.virtual_ground_height_id_g * cfg_.resolution;
 
-    if (!cfg_.map_sliding_en) {
-        cout << YELLOW << " -- [ProbMap] Map sliding disabled, set origin to [" << cfg_.fix_map_origin.transpose()
-            << "] -- " << RESET << endl;
-        slideAllMap(cfg_.fix_map_origin);
-    }
 
 
     int map_size = sc_.map_size_i.prod();
@@ -81,6 +81,7 @@ void ProbMap::initProbMap() {
     raycast_data_.hit_cnt.resize(map_size, 0);
 
     resetLocalMap();
+    slideAllMap(cfg_.fix_map_origin);
 
     cout << GREEN << " -- [ProbMap] Init successfully -- ." << RESET << endl;
     printMapInformation();
@@ -289,6 +290,13 @@ void ProbMap::updateOccPointCloud(const PointCloud& input_cloud) {
 }
 
 void ProbMap::slideAllMap(const rog_map::Vec3f& pos) {
+    Vec3i next;
+    posToGlobalIndex(pos, next);
+    if (((next - local_map_origin_i_).cwiseAbs().array() >= sc_.map_size_i.array()).any()) {
+        resetLocalMap();
+        inf_map_->resetLocalMap();
+        if (cfg_.frontier_extraction_en) fcnt_map_->resetLocalMap();
+    }
     mapSliding(pos);
     inf_map_->mapSliding(pos);
     if (cfg_.frontier_extraction_en) {
@@ -303,12 +311,6 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
     TimeConsuming tc("updateMap", false);
     const Vec3f& pos = pose.first;
     time_consuming_[4] = cloud.size();
-    if (cfg_.map_sliding_en && !insideLocalMap(pos) && raycast_data_.batch_update_counter == 0) {
-        cout << YELLOW << " -- [ROGMapCore] cur_pose out of map range, reset the map." << RESET << endl;
-        cout << YELLOW << " -- [ROGMapCore] Sliding to map center at: " << pos.transpose() << RESET << endl;
-        slideAllMap(pos);
-        return;
-    }
 
     if (pos.z() > cfg_.virtual_ceil_height) {
         cout << RED << " -- [ROGMapCore] Odom above virtual ceil, please check map parameter -- ." << RESET
@@ -322,8 +324,7 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
     }
 
     if (raycast_data_.batch_update_counter == 0
-        && (map_empty_ ||
-            (cfg_.map_sliding_en && (pos - local_map_origin_d_).norm() > cfg_.map_sliding_thresh))) {
+        && cfg_.map_sliding_en && (map_empty_ || (pos - local_map_origin_d_).norm() > cfg_.map_sliding_thresh)) {
         slideAllMap(pos);
     }
 
@@ -348,23 +349,7 @@ void ProbMap::updateProbMap(const PointCloud& cloud, const Pose& pose) {
         esdf_map_->updateESDF3D(pos);
     }
 
-    /* For the first frame, clear all unknown around the robot */
-    static bool first = true;
-    if (first) {
-        first = false;
-        for (double dx = -cfg_.raycast_range_min; dx <= cfg_.raycast_range_min; dx += cfg_.resolution) {
-            for (double dy = -cfg_.raycast_range_min; dy <= cfg_.raycast_range_min; dy += cfg_.resolution) {
-                for (double dz = -cfg_.raycast_range_min; dz <= cfg_.raycast_range_min; dz += cfg_.resolution) {
-                    Vec3f p(dx, dy, dz);
-                    if (p.norm() <= cfg_.raycast_range_min) {
-                        Vec3f pp = pos + p;
-                        int hash_id = getHashIndexFromPos(pp);
-                        missPointUpdate(pp, hash_id, 999);
-                    }
-                }
-            }
-        }
-    }
+
 }
 
 GridType ProbMap::getGridType(Vec3i& id_g) const {
@@ -691,6 +676,7 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
         }
 
         Vec3f p(pcl_p.x, pcl_p.y, pcl_p.z);
+        if (!p.allFinite() || (p - cur_odom).squaredNorm() <= 1e-16) continue;
         Vec3i pt_id_g;
 
         // no raycasting, purely add occ pints
@@ -712,13 +698,13 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
             // find the intersect point with the ceil
             const double dz = p.z() - cur_odom.z();
             const double pc = cfg_.virtual_ceil_height - cur_odom.z();
-            p = cur_odom + (p - cur_odom).normalized() * pc / dz;
+            p = cur_odom + (p - cur_odom) * (pc / dz);
         }else if (p.z() < cfg_.virtual_ground_height) {
             update_hit = false;
             // find the intersect point with the ground
             const double dz = p.z() - cur_odom.z();
             const double pc = cfg_.virtual_ground_height - cur_odom.z();
-            p = cur_odom + (p - cur_odom).normalized() * pc / dz;
+            p = cur_odom + (p - cur_odom) * (pc / dz);
         }
 
         // 1.4) bounding box filter
@@ -758,7 +744,8 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
         // 4) process all inf points, updae free probability
         for (const auto& p : raycasting_cloud) {
             Vec3f raycast_start = (p - cur_odom).normalized() * cfg_.raycast_range_min + cur_odom;
-            raycast_data_.raycaster.setInput(raycast_start, p);
+            if ((p - cur_odom).norm() <= cfg_.raycast_range_min ||
+                !raycast_data_.raycaster.setInput(raycast_start, p)) continue;
             Vec3f ray_pt;
             while (raycast_data_.raycaster.step(ray_pt)) {
                 Vec3i cur_ray_id_g;
@@ -775,11 +762,12 @@ void ProbMap::raycastProcess(const PointCloud& input_cloud, const Vec3f& cur_odo
 
 void ProbMap::insertUpdateCandidate(const Vec3i& id_g, bool is_hit) {
     const auto& hash_id = getHashIndexFromGlobalIndex(id_g);
-    raycast_data_.operation_cnt[hash_id]++;
+    if (raycast_data_.operation_cnt[hash_id] < std::numeric_limits<uint32_t>::max())
+        raycast_data_.operation_cnt[hash_id]++;
     if (raycast_data_.operation_cnt[hash_id] == 1) {
         raycast_data_.update_cache_id_g.push(id_g);
     }
-    if (is_hit) {
+    if (is_hit && raycast_data_.hit_cnt[hash_id] < std::numeric_limits<uint32_t>::max()) {
         raycast_data_.hit_cnt[hash_id]++;
     }
 }

@@ -165,6 +165,8 @@ namespace rog_map {
             LoadParam(name_space + "/unk_inflation_step", unk_inflation_step, 1);
 
             LoadParam(name_space + "/inflation_step", inflation_step, 1);
+            LoadParam(name_space + "/inflation_cube", inflation_cube, false);
+            LoadParam(name_space + "/virtual_height_enable", virtual_height_enable, true);
             LoadParam(name_space + "/intensity_thresh", intensity_thresh, -1);
 
             vector<double> temp_map_size;
@@ -194,7 +196,7 @@ namespace rog_map {
             }
             LoadParam(name_space + "/raycasting/unk_thresh", unk_thresh, 0.70);
             LoadParam(name_space + "/raycasting/p_hit", p_hit, 0.70f);
-            LoadParam(name_space + "/raycasting/p_miss", p_miss, 0.70f);
+            LoadParam(name_space + "/raycasting/p_miss", p_miss, 0.40f);
             LoadParam(name_space + "/raycasting/p_min", p_min, 0.12f);
             LoadParam(name_space + "/raycasting/p_max", p_max, 0.97f);
             LoadParam(name_space + "/raycasting/p_occ", p_occ, 0.80f);
@@ -223,7 +225,19 @@ namespace rog_map {
             LoadParam(name_space + "/virtual_ground_height", virtual_ground_height, -0.1);
             LoadParam(name_space + "/virtual_ceil_height", virtual_ceil_height, -0.1);
 
+            if (!std::isfinite(resolution) || resolution <= 0 || !std::isfinite(inflation_resolution) ||
+                inflation_resolution < resolution || !map_size_d.allFinite() || map_size_d.minCoeff() <= 0 ||
+                inflation_step < 0 || inflation_step > 10 ||
+                !(p_min > 0 && p_min < p_free && p_free < p_occ && p_occ < p_max && p_max < 1) ||
+                !(p_hit > 0.5 && p_hit < 1 && p_miss > 0 && p_miss < 0.5) ||
+                !(raycast_range_min >= 0 && raycast_range_max > raycast_range_min))
+                throw std::invalid_argument("Invalid ROG map configuration");
+            if ((map_size_d.array() / resolution > 32768).any() ||
+                (map_size_d.array() / resolution).prod() > 16000000)
+                throw std::invalid_argument("Excessive local map dimensions");
             resetMapSize();
+            if ((map_size_d.array() / resolution).prod() > 16000000)
+                throw std::invalid_argument("ROG local map exceeds 16 million cells");
 
             /// Probabilistic Update
 #define logit(x) (log((x) / (1 - (x))))
@@ -251,7 +265,7 @@ namespace rog_map {
             for (int dx = -inflation_step; dx <= inflation_step; dx++) {
                 for (int dy = -inflation_step; dy <= inflation_step; dy++) {
                     for (int dz = -inflation_step; dz <= inflation_step; dz++) {
-                        if (inflation_step == 1 ||
+                        if (inflation_cube || inflation_step == 1 ||
                             dx * dx + dy * dy + dz * dz <= inflation_step * inflation_step) {
                             spherical_neighbor.emplace_back(dx, dy, dz);
                         }
@@ -293,6 +307,7 @@ namespace rog_map {
 
         double resolution, inflation_resolution;
         int inflation_step;
+        bool inflation_cube{false}, virtual_height_enable{true};
         Vec3f local_update_box_d, half_local_update_box_d;
         Vec3i local_update_box_i, half_local_update_box_i;
         Vec3f map_size_d, half_map_size_d;
@@ -359,7 +374,7 @@ namespace rog_map {
             } else {
                 max_step = std::max(inflation_step, unk_inflation_step);
             }
-            inf_half_map_size_i = (half_map_size_d / inflation_resolution).cast<int>()
+            inf_half_map_size_i = (half_map_size_d / inflation_resolution).array().ceil().cast<int>().matrix()
                                   + (max_step + 1) * Vec3i::Ones();
 
             // 2) we calculate the index number of the prob map, which should be smaller than infmap

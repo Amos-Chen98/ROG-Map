@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rog_map_msgs</name><version>0.1.0</version>
+  <description>Complete local occupancy snapshots for ROG mapping consumers.</description>
+  <maintainer email="chen@todo.todo">Chen</maintainer><license>BSD-3-Clause</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend><exec_depend>message_runtime</exec_depend>
+  <depend>std_msgs</depend><depend>geometry_msgs</depend>
+</package>

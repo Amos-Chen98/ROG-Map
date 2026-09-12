@@ -1,3 +1,5 @@
+> This checkout also provides the independent, local-only ROS mapping node used by DRAGON. See [local mapper integration](rog_map/README.md) for launch, snapshot protocol, tests and timing measurements. The upstream examples below are separate from that workflow.
+
 <div align="center">
     <h2>ROG-Map: An Efficient Robocentric Occupancy Grid Map for Large-scene and High-resolution LiDAR-based Motion Planning</h2>
     <strong>IROS 2024</strong>

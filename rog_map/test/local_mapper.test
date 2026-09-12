@@ -1,0 +1,5 @@
+<launch>
+  <rosparam ns="local_mapper_test" file="$(find rog_map)/config/local_map.yaml"/>
+  <rosparam param="local_mapper_test/rog_map/map_size">[2.0, 2.0, 2.0]</rosparam>
+  <test pkg="rog_map" type="local_mapper_test" test-name="local_mapper_test" time-limit="60"/>
+</launch>

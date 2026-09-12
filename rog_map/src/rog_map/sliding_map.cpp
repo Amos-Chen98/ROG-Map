@@ -54,10 +54,9 @@ SlidingMap::initSlidingMap(const rog_map::Vec3i &half_map_size_i, const double &
     sc_.half_map_size_i = half_map_size_i;
     sc_.map_size_i = 2 * sc_.half_map_size_i + Vec3i::Constant(1);
     sc_.map_vox_num = sc_.map_size_i.prod();
-    if (!map_sliding_en) {
-        local_map_origin_d_ = fix_map_origin;
-        posToGlobalIndex(local_map_origin_d_, local_map_origin_i_);
-    }
+    local_map_origin_d_ = fix_map_origin;
+    posToGlobalIndex(local_map_origin_d_, local_map_origin_i_);
+    updateLocalMapOriginAndBound(local_map_origin_d_, local_map_origin_i_);
     had_been_initialized = true;
 }
 
@@ -90,9 +89,11 @@ void SlidingMap::updateLocalMapOriginAndBound(const rog_map::Vec3f &new_origin_d
     local_map_bound_max_i_ = local_map_origin_i_ + sc_.half_map_size_i;
     local_map_bound_min_i_ = local_map_origin_i_ - sc_.half_map_size_i;
 
-    // the double map bound only consider the closed cell center
-    globalIndexToPos(local_map_bound_min_i_, local_map_bound_min_d_);
-    globalIndexToPos(local_map_bound_max_i_, local_map_bound_max_d_);
+    // Ray clipping must include the full boundary voxels, not just centers.
+    local_map_bound_min_d_ = local_map_bound_min_i_.cast<double>() * sc_.resolution;
+    local_map_bound_max_d_ = (local_map_bound_max_i_ + Vec3i::Ones()).cast<double>() * sc_.resolution;
+    for (int a = 0; a < 3; ++a)
+        local_map_bound_max_d_[a] = std::nextafter(local_map_bound_max_d_[a], local_map_bound_min_d_[a]);
 }
 
 void SlidingMap::clearMemoryOutOfMap(const vector<int> &clear_id, const int &i) {
@@ -119,7 +120,7 @@ void SlidingMap::mapSliding(const Vec3f &odom) {
     /// Compute the delta shift
     Vec3i shift_num = new_origin_i - local_map_origin_i_;
     for (long unsigned int i = 0; i < 3; i++) {
-        if (fabs(shift_num[i]) > sc_.map_size_i[i]) {
+        if (fabs(shift_num[i]) >= sc_.map_size_i[i]) {
             // Clear all map
             resetLocalMap();
             updateLocalMapOriginAndBound(new_origin_d, new_origin_i);

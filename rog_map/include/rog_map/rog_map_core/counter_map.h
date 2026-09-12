@@ -125,9 +125,9 @@ namespace rog_map {
 
     private:
         void resetCell(const int &hash_id) override {
+            resetOneCell(hash_id);
             md_.occupied_cnt[hash_id] = 0;
             md_.unknown_cnt[hash_id] = md_.sub_grid_num;
-            resetOneCell(hash_id);
         }
 
         bool had_been_initialized{false};

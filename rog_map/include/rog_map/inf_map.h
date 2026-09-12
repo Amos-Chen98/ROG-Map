@@ -53,6 +53,11 @@ namespace rog_map {
 
         void resetLocalMap() override;
 
+        void exportOccupiedBits(const Vec3i& minimum, const Vec3i& size,
+                                std::vector<uint8_t>& bits) const {
+            exportBits(minimum, size, bits, [this](int h) { return imd_.occ_inflate_cnt[h] > 0; });
+        }
+
         GridType getGridType(const Vec3f &pos) const;
 
         GridType getGridType(const Vec3i &id_g) const ;

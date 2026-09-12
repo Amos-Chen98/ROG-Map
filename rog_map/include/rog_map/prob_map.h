@@ -104,11 +104,12 @@ namespace rog_map {
         std::vector<float> occupancy_buffer_;
 
         bool map_empty_{true};
+        bool initialized_{false};
         struct RaycastData {
             raycaster::RayCaster raycaster;
             std::queue<Vec3i> update_cache_id_g;
-            std::vector<uint16_t> operation_cnt;
-            std::vector<uint16_t> hit_cnt;
+            std::vector<uint32_t> operation_cnt;
+            std::vector<uint32_t> hit_cnt;
             Vec3f cache_box_max, cache_box_min, local_update_box_max, local_update_box_min;
             int batch_update_counter{0};
             std::mutex raycast_range_mtx;

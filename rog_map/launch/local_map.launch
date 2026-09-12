@@ -1,0 +1,25 @@
+<launch>
+  <arg name="robot_ns" default="dragon"/>
+  <arg name="world_frame_id" default="world"/>
+  <arg name="sensor_origin_frame_id" default="$(arg robot_ns)/lidar_origin"/>
+  <arg name="pcl_topic" default="/$(arg robot_ns)/cloud_denoised"/>
+  <arg name="map_topic" default="/$(arg robot_ns)/rog_map/local_map"/>
+  <arg name="voxel_width" default="0.10"/>
+  <arg name="dilate_radius" default="0.20"/>
+  <arg name="local_map_size" default="[12.0, 12.0, 8.0]"/>
+  <arg name="max_range" default="12.0"/>
+  <group ns="$(arg robot_ns)">
+    <node pkg="rog_map" type="rog_map_node" name="rog_map" output="screen">
+      <rosparam file="$(find rog_map)/config/local_map.yaml"/>
+      <param name="world_frame_id" value="$(arg world_frame_id)"/>
+      <param name="sensor_origin_frame_id" value="$(arg sensor_origin_frame_id)"/>
+      <remap from="~cloud" to="$(arg pcl_topic)"/>
+      <remap from="~local_map" to="$(arg map_topic)"/>
+      <param name="rog_map/resolution" value="$(arg voxel_width)"/>
+      <param name="rog_map/inflation_resolution" value="$(arg voxel_width)"/>
+      <param name="dilate_radius" value="$(arg dilate_radius)"/>
+      <rosparam param="rog_map/map_size" subst_value="true">$(arg local_map_size)</rosparam>
+      <rosparam param="rog_map/raycasting/ray_range" subst_value="true">[0.0, $(arg max_range)]</rosparam>
+    </node>
+  </group>
+</launch>

@@ -79,14 +79,17 @@ namespace rog_map {
                        cfg.unk_thresh);
 
         posToGlobalIndex(cfg.visualization_range, sc_.visualization_range_i);
-        cfg.virtual_ceil_height_id_g =
-                int(cfg.virtual_ceil_height / cfg.inflation_resolution + SIGN(cfg.inflation_resolution) * 0.5) -
-                cfg.inflation_step;
-        cfg.virtual_ground_height_id_g =
-                int(cfg.virtual_ground_height / cfg.inflation_resolution + SIGN(cfg.inflation_resolution) * 0.5) +
-                cfg.inflation_step;
-        cfg.virtual_ceil_height = cfg.virtual_ceil_height_id_g * cfg.inflation_resolution;
-        cfg.virtual_ground_height = cfg.virtual_ground_height_id_g * cfg.inflation_resolution;
+        if (!cfg.virtual_height_enable) {
+            cfg.virtual_ceil_height = std::numeric_limits<double>::max();
+            cfg.virtual_ground_height = -std::numeric_limits<double>::max();
+            cfg.virtual_ceil_height_id_g = std::numeric_limits<int>::max();
+            cfg.virtual_ground_height_id_g = std::numeric_limits<int>::min();
+        } else {
+            cfg.virtual_ceil_height_id_g = int(std::floor(cfg.virtual_ceil_height / cfg.inflation_resolution)) - cfg.inflation_step;
+            cfg.virtual_ground_height_id_g = int(std::floor(cfg.virtual_ground_height / cfg.inflation_resolution)) + cfg.inflation_step;
+            cfg.virtual_ceil_height = cfg.virtual_ceil_height_id_g * cfg.inflation_resolution;
+            cfg.virtual_ground_height = cfg.virtual_ground_height_id_g * cfg.inflation_resolution;
+        }
 
         imd_.occ_inflate_cnt.resize(sc_.map_vox_num);
         imd_.occ_neighbor_num = cfg.spherical_neighbor.size();

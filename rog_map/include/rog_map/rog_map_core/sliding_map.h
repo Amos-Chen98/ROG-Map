@@ -65,6 +65,32 @@ namespace rog_map {
         bool insideLocalMap(const Vec3i &id_g) const;
 
     protected:
+        // Reorder the circular storage into the wire format without point clouds
+        // or per-voxel modulo/Eigen operations. Caller owns the map update lock.
+        template<class Predicate>
+        void exportBits(const Vec3i& minimum, const Vec3i& size,
+                        std::vector<uint8_t>& bits, Predicate occupied) const {
+            const size_t count = size.cast<int64_t>().prod();
+            bits.assign((count + 7) / 8, 0);
+            std::vector<int> offsets[3];
+            const int strides[3] = {sc_.map_size_i.y()*sc_.map_size_i.z(), sc_.map_size_i.z(), 1};
+            for (int a = 0; a < 3; ++a) {
+                offsets[a].resize(size[a]);
+                for (int i = 0; i < size[a]; ++i) {
+                    int k = (minimum[a] + i) % sc_.map_size_i[a];
+                    if (k > sc_.half_map_size_i[a]) k -= sc_.map_size_i[a];
+                    if (k < -sc_.half_map_size_i[a]) k += sc_.map_size_i[a];
+                    offsets[a][i] = (k + sc_.half_map_size_i[a]) * strides[a];
+                }
+            }
+            size_t i = 0;
+            for (int z = 0; z < size.z(); ++z)
+                for (int y = 0; y < size.y(); ++y) {
+                    const int yz = offsets[1][y] + offsets[2][z];
+                    for (int x = 0; x < size.x(); ++x, ++i)
+                        if (occupied(offsets[0][x] + yz)) bits[i/8] |= uint8_t(1) << (i%8);
+                }
+        }
         struct SlidingConfig {
             double resolution{0.0};
             double resolution_inv{0.0};

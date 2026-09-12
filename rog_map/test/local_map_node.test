@@ -1,0 +1,11 @@
+<launch>
+  <include file="$(find rog_map)/launch/local_map.launch">
+    <arg name="robot_ns" value="map_test"/>
+    <arg name="pcl_topic" value="/map_test/cloud"/>
+    <arg name="sensor_origin_frame_id" value="map_test/lidar"/>
+    <arg name="local_map_size" value="[4.0,4.0,4.0]"/>
+  </include>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="map_test_sensor" args="0 0 0 0 0 0 world map_test/lidar"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="map_test_cloud_frame" args="1 0 0 0 0 0 world map_test/cloud_frame"/>
+  <test pkg="rog_map" type="local_map_node_test.py" test-name="local_map_node_test" time-limit="40"/>
+</launch>
