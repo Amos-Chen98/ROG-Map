@@ -76,6 +76,9 @@ public:
         nh_.param<std::string>("world_frame_id", world_, "world");
         nh_.param<std::string>("sensor_origin_frame_id", sensor_, "dragon/lidar_origin");
         nh_.param("tf_timeout", tf_timeout_, 0.05);
+        nh_.param("occupied_cells_publish_rate", viz_rate_, 2.0);
+        if (!std::isfinite(viz_rate_) || (viz_rate_ != -1.0 && viz_rate_ <= 0.0))
+            throw std::invalid_argument("occupied_cells_publish_rate must be -1 or a positive frequency in Hz");
         if (world_.empty() || sensor_.empty() || !std::isfinite(tf_timeout_) || tf_timeout_ < 0)
             throw std::invalid_argument("Invalid local map TF configuration");
         newEpoch();
@@ -84,7 +87,8 @@ public:
         diag_pub_ = nh_.advertise<diagnostic_msgs::DiagnosticArray>("diagnostics", 1);
         cloud_sub_ = nh_.subscribe("cloud", 1, &LocalMapNode::cloudCallback, this, ros::TransportHints().tcpNoDelay());
         reset_srv_ = nh_.advertiseService("reset", &LocalMapNode::reset, this);
-        viz_timer_ = nh_.createTimer(ros::Duration(0.5), &LocalMapNode::visualize, this);
+        if (viz_rate_ > 0.0)
+            viz_timer_ = nh_.createTimer(ros::Duration(1.0 / viz_rate_), &LocalMapNode::visualize, this);
         diag_timer_ = nh_.createWallTimer(ros::WallDuration(1.0), &LocalMapNode::diagnose, this);
         worker_ = std::thread(&LocalMapNode::work, this);
     }
@@ -128,6 +132,7 @@ private:
         map_pub_.publish(map);
         { std::lock_guard<std::mutex> lock(snapshot_mutex_); snapshot_ = map; }
         ++published_;
+        if (viz_rate_ == -1.0) publishVisualization(map);
     }
     void work() {
         while (true) {
@@ -175,8 +180,11 @@ private:
         std::lock_guard<std::mutex> lock(snapshot_mutex_); return snapshot_;
     }
     void visualize(const ros::TimerEvent&) {
+        publishVisualization(snapshot());
+    }
+    void publishVisualization(const rog_map_msgs::LocalMap::ConstPtr& map) {
         if (!viz_pub_.getNumSubscribers()) return;
-        const auto map = snapshot(); if (!map) return;
+        if (!map) return;
         visualization_msgs::MarkerArray out;
         visualization_msgs::Marker voxels;
         voxels.header = map->header; voxels.ns = "occupied"; voxels.id = 0;
@@ -236,7 +244,7 @@ private:
     tf2_ros::Buffer tf_;
     tf2_ros::TransformListener listener_;
     rog_map::LocalMapper mapper_;
-    std::string world_, sensor_; double tf_timeout_;
+    std::string world_, sensor_; double tf_timeout_, viz_rate_;
     ros::Subscriber cloud_sub_; ros::Publisher map_pub_, viz_pub_, diag_pub_;
     ros::ServiceServer reset_srv_; ros::Timer viz_timer_; ros::WallTimer diag_timer_;
     std::mutex mutex_, snapshot_mutex_; std::condition_variable cv_, reset_cv_; std::thread worker_;

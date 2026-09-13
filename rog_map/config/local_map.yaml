@@ -1,3 +1,7 @@
+# occupied_cells visualization: positive Hz uses a ROS-time timer;
+# -1 publishes with every local_map snapshot, including resets.
+occupied_cells_publish_rate: -1
+
 rog_map:
   resolution: 0.10
   inflation_resolution: 0.10

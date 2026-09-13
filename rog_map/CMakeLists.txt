@@ -26,7 +26,6 @@ find_package(catkin REQUIRED COMPONENTS
         message_generation
         visualization_msgs
         message_filters
-        dynamic_reconfigure
         tf2_ros
         tf2_eigen
         rog_map_msgs
@@ -36,17 +35,10 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 
-#add dynamic reconfigure api
-set (DYNAMIC_RECONFIGURE_PATH config/visualization.cfg)
-
-generate_dynamic_reconfigure_options(
-        ${DYNAMIC_RECONFIGURE_PATH}
-)
-
 catkin_package(
         INCLUDE_DIRS include
         LIBRARIES rog_map
-        CATKIN_DEPENDS roscpp std_msgs dynamic_reconfigure tf2_ros rog_map_msgs
+        CATKIN_DEPENDS roscpp std_msgs tf2_ros rog_map_msgs
         #  DEPENDS system_lib
 )
 
@@ -69,10 +61,10 @@ add_library(rog_map STATIC ${srcs}
 target_include_directories(rog_map PUBLIC include)
 target_link_libraries(rog_map PUBLIC
         ${THIRD_PARTY})
-add_dependencies(rog_map ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+add_dependencies(rog_map ${catkin_EXPORTED_TARGETS})
 add_executable(rog_map_node apps/rog_map_node.cpp)
 target_link_libraries(rog_map_node rog_map ${catkin_LIBRARIES})
-add_dependencies(rog_map_node ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+add_dependencies(rog_map_node ${catkin_EXPORTED_TARGETS})
 install(TARGETS rog_map rog_map_node ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
         RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY include/ DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})

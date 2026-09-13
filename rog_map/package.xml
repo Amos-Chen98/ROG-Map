@@ -69,7 +69,6 @@
     <depend>nav_msgs</depend>
     <depend>visualization_msgs</depend>
     <depend>message_filters</depend>
-    <depend>dynamic_reconfigure</depend>
     <depend>tf2_ros</depend>
     <depend>tf2_eigen</depend>
     <depend>rog_map_msgs</depend>
